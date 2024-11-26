@@ -1,0 +1,49 @@
+# Entornos virtuales y variables de entorno
+*.venv
+venv/
+.env
+*.env
+
+# Archivos de configuración de Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+
+# Archivos de logs
+*.log
+logs/
+
+# Directorios de cobertura de pruebas y análisis
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.*
+*.cover
+.cache
+
+# Dependencias de compilación y artefactos generados
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos generados por Docker
+*.pid
+docker-compose.override.yml  # Si tienes configuraciones específicas para entornos locales
+
+# Archivos de IDEs/editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# FastAPI-specific (opcional)
+staticfiles/
+mediafiles/
