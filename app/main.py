@@ -1,5 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import RedirectResponse
 from decouple import config
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -8,8 +10,23 @@ import app.models as models
 from typing import List
 from app.database import engine, SessionLocal
 
-
 app = FastAPI(root_path="/api")
+
+# Detect environment
+ENVIRONMENT = config("ENVIRONMENT", default="development")  # "development" or "production"
+
+# Middleware para redirigir HTTP a HTTPS solo en producción
+if ENVIRONMENT == "production":
+    @app.middleware("http")
+    async def https_redirect(request: Request, call_next):
+        if request.url.scheme == "http" and "localhost" not in request.url.netloc:
+            https_url = request.url.replace(scheme="https")
+            return RedirectResponse(url=str(https_url))
+
+        response = await call_next(request)
+        return response
+
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config('ALLOWED_ORIGINS', cast=lambda v: [
@@ -18,8 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -58,13 +73,15 @@ class CardResponse(CardBase):
     class Config:
         from_attributes = True
 
+
 class PaginatedCardResponse(BaseModel):
     cards: List[CardResponse]
     total_count: int
     current_page: int
-    category_id:int
+    category_id: int
 
 # Category endpoints
+
 
 @app.get("/search")
 def search_cards(
@@ -104,7 +121,6 @@ def search_cards(
     }
 
 
-
 @app.get('/categories/{category_id}/cards/', response_model=PaginatedCardResponse)
 def get_cards_by_category(
     category_id: int,
@@ -128,14 +144,16 @@ def get_cards_by_category(
     )
 
     # Get total count of cards for this specific category
-    total_count = db.query(models.Card).filter(models.Card.category_id == category_id).count()
+    total_count = db.query(models.Card).filter(
+        models.Card.category_id == category_id).count()
 
     return {
         "cards": cards,
         "total_count": total_count,
         "current_page": page,
-        "category_id":category_id
+        "category_id": category_id
     }
+
 
 @app.post('/categories/', response_model=CategoryResponse)
 def create_category(category: CategoryBase, db: Session = Depends(get_db)):
@@ -212,7 +230,7 @@ def get_paginated_cards(
         "cards": cards,
         "total_count": total_count,
         "current_page": page,
-        "category_id":0
+        "category_id": 0
     }
 
 
