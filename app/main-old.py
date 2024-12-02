@@ -8,9 +8,9 @@ import app.models as models
 from typing import List
 from app.database import engine, SessionLocal
 
-# parsed_origins = config('ALLOWED_ORIGINS', cast=lambda v: [
-#                         s.strip() for s in v.split(',')])
-# print(f"Parsed CORS Origins: {parsed_origins}")
+parsed_origins = config('ALLOWED_ORIGINS', cast=lambda v: [
+                        s.strip() for s in v.split(',')])
+print(f"Parsed CORS Origins: {parsed_origins}")
 
 app = FastAPI(root_path="/api")
 app.add_middleware(
@@ -21,15 +21,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["http://localhost:5173"],  # Frontend origin
-#     allow_credentials=True,
-#     allow_methods=["*"],                     # Allow all HTTP methods
-#     allow_headers=["*"],                     # Allow all headers
-# )
-
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -45,11 +36,12 @@ def get_db():
 
 
 class UserBase(BaseModel):
+    id: int
     email: EmailStr
 
 
 class UserCreate(UserBase):
-    pass
+    email: EmailStr
 
 
 class UserResponse(UserBase):
@@ -63,13 +55,8 @@ class CategoryBase(BaseModel):
     name: str = Field(min_length=1)
 
 
-class CategoryCreate(CategoryBase):
-    user_id: int
-
-
 class CategoryResponse(CategoryBase):
     id: int
-    user_id: int
 
     class Config:
         from_attributes = True
@@ -81,13 +68,9 @@ class CardBase(BaseModel):
     category_id: int
 
 
-class CardCreate(CardBase):
-    user_id: int
-
-
 class CardResponse(CardBase):
     id: int
-    user_id: int
+    category: CategoryResponse
 
     class Config:
         from_attributes = True
@@ -98,6 +81,7 @@ class PaginatedCardResponse(BaseModel):
     total_count: int
     current_page: int
     category_id: int
+
 
 
 # Users endpoints
@@ -113,33 +97,10 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-
 @app.get('/users/', response_model=List[UserResponse])
 def get_users(db: Session = Depends(get_db)):
     return db.query(models.User).all()
 
-
-@app.get('/users/{user_id}/categories', response_model=List[CategoryResponse])
-def get_user_categories(user_id: int, db: Session = Depends(get_db)):
-    # Optional: Verify user exists first
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    categories = db.query(models.Category).filter(
-        models.Category.user_id == user_id).all()
-    return categories
-
-
-@app.get('/users/{user_id}/cards', response_model=List[CardResponse])
-def get_user_cards(user_id: int, db: Session = Depends(get_db)):
-    # Optional: Verify user exists first
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    cards = db.query(models.Card).filter(models.Card.user_id == user_id).all()
-    return cards
 
 
 # Category endpoints
@@ -216,14 +177,8 @@ def get_cards_by_category(
 
 
 @app.post('/categories/', response_model=CategoryResponse)
-def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
-    # Verify user exists
-    user = db.query(models.User).filter(
-        models.User.id == category.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    db_category = models.Category(name=category.name, user_id=category.user_id)
+def create_category(category: CategoryBase, db: Session = Depends(get_db)):
+    db_category = models.Category(name=category.name)
     try:
         db.add(db_category)
         db.commit()
@@ -235,41 +190,25 @@ def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
 
 
 @app.get('/categories/', response_model=List[CategoryResponse])
-def get_categories(user_id=int, db: Session = Depends(get_db)):
+def get_categories(db: Session = Depends(get_db)):
+    return db.query(models.Category).all()
 
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    categories = (
-        db.query(models.Category)
-        .filter(models.Category.user_id == user_id).all()
-    )
-    return categories
 
 
 # Card endpoints
 @app.post('/cards', response_model=CardResponse)
-def create_card(card: CardCreate, db: Session = Depends(get_db)):
-    # Check if user exists
-    user = db.query(models.User).filter(models.User.id == card.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+def create_card(card: CardBase, db: Session = Depends(get_db)):
+    # Check if category exists
 
-    # Check if category exists and belongs to the user
     category = db.query(models.Category).filter(
-        models.Category.id == card.category_id,
-        models.Category.user_id == card.user_id
-    ).first()
+        models.Category.id == card.category_id).first()
     if not category:
-        raise HTTPException(
-            status_code=404, detail="Category not found or does not belong to user")
+        raise HTTPException(status_code=404, detail="Category not found")
 
     card_model = models.Card(
         front=card.front,
         back=card.back,
-        category_id=card.category_id,
-        user_id=card.user_id
+        category_id=card.category_id
     )
     try:
         db.add(card_model)
@@ -289,14 +228,9 @@ def get_cards(db: Session = Depends(get_db)):
 @app.get("/cards")
 def get_paginated_cards(
     page: int = Query(0, ge=0),  # Page number, start at 0
-    page_size: int = Query(10, ge=1, le=100),  # 10 records per page
-    user_id=int
+    page_size: int = Query(10, ge=1, le=100)  # 10 records per page
 ):
     db = next(get_db())
-
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
 
     # Calculate offset based on page number
     offset = page * page_size
@@ -304,7 +238,6 @@ def get_paginated_cards(
     # Fetch exactly 10 records for the current page
     cards = (
         db.query(models.Card)
-        .filter(models.Card.user_id == user_id)
         .order_by(desc(models.Card.id))
         .offset(offset)
         .limit(page_size)
@@ -318,6 +251,7 @@ def get_paginated_cards(
         "cards": cards,
         "total_count": total_count,
         "current_page": page,
+        "category_id": 0
     }
 
 
