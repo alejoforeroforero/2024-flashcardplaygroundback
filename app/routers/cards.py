@@ -63,7 +63,8 @@ def get_paginated_cards(
         .all()
     )
 
-    total_count = db.query(Card).count()
+    total_count = db.query(Card).filter(
+        Card.user_id == user_id).count()
 
     return {
         "cards": cards,

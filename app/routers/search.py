@@ -23,7 +23,6 @@ def search_cards(
 
     search_query = f"%{query}%"
     base_query = db.query(Card).filter(
-        # Search in both front and back fields using LIKE
         (Card.front.ilike(search_query)) |
         (Card.back.ilike(search_query))
     )

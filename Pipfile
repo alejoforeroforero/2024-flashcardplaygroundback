@@ -9,6 +9,9 @@ uvicorn = "*"
 sqlalchemy = "*"
 python-decouple = "*"
 email-validator = "*"
+google-auth = "*"
+requests = "*"
+pyjwt = "*"
 
 [dev-packages]
 

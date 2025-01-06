@@ -1,17 +1,34 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List
+
+
+class GoogleLoginRequest(BaseModel):
+    token: str
+
 
 class UserBase(BaseModel):
     email: EmailStr
 
+
 class UserCreate(UserBase):
     pass
 
-class UserResponse(UserBase):
-    id: int
 
-    class Config:
-        from_attributes = True
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class UserResponse(BaseModel):
+    # Configura el modelo para trabajar con instancias de SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    email: str
+
+
+class LoginResponse(BaseModel):
+    userInfo: UserResponse
+    accessToken: str
+
 
 class CategoryBase(BaseModel):
     name: str = Field(min_length=1)

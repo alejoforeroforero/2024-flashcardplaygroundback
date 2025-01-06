@@ -74,3 +74,18 @@ def get_cards_by_category(
         "current_page": page,
         "category_id": category_id
     }
+
+
+@router.delete('/{category_id}')
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+
+    category = db.query(Category).filter(
+        Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    db.query(Card).filter(Card.category_id == category_id).delete()
+    db.commit()
+
+    db.query(Category).filter(Category.id == category_id).delete()
+    db.commit()
