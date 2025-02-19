@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.responses import JSONResponse
 from decouple import config
 import app.models as models
@@ -26,3 +27,6 @@ app.include_router(categories.router, prefix="/categories",
 app.include_router(cards.router, prefix="/cards", tags=["Cards"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
+
+if config('ENVIRONMENT', default='development') == 'production':
+    app.add_middleware(HTTPSRedirectMiddleware)

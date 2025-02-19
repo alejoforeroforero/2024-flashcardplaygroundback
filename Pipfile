@@ -12,6 +12,7 @@ email-validator = "*"
 google-auth = "*"
 requests = "*"
 pyjwt = "*"
+slowapi = "*"  # For rate limiting
 
 [dev-packages]
 

@@ -206,37 +206,55 @@ async def refresh_token(
 
 @router.post("/login")
 async def google_login(
-    request: dict,
+    request: GoogleLoginRequest,
     response: Response,
     db: Session = Depends(get_db),
 ):
     try:
-        # Tu lógica de verificación de Google existente aquí...
-        token = request.get("token")
+        token = request.token
         if not token:
-            raise HTTPException(status_code=400, detail="Token is required")
+            raise HTTPException(
+                status_code=400, 
+                detail="Token is required"
+            )
         
         try:
-            # Verify the token with Google
+            # Only log first few characters of the token
+            print(f"Attempting to verify token: {token[:10]}...")
+            
             id_info = id_token.verify_oauth2_token(
                 token,
                 requests.Request(),
-                GOOGLE_CLIENT_ID
+                GOOGLE_CLIENT_ID,
+                clock_skew_in_seconds=10
             )
             
-            # Check if the token is issued by Google
+            print("Token verification successful")
+            
             if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError('Invalid issuer')
+                raise HTTPException(
+                    status_code=403,
+                    detail="Invalid token issuer"
+                )
                 
-            # Extract user info from verified token
+            if not id_info.get('email'):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Email not found in token"
+                )
+                
             user_info = {
-                "email": id_info.get("email"),
-                "name": id_info.get("name"),
-                "picture": id_info.get("picture")
+                "email": id_info['email'],
+                "name": id_info.get('name'),
+                "picture": id_info.get('picture')
             }
             
-        except ValueError:
-            raise HTTPException(status_code=403, detail="Invalid token")
+        except ValueError as e:
+            print("Token verification failed")  # Removed detailed error message
+            raise HTTPException(
+                status_code=403,
+                detail="Token verification failed"
+            )
 
         db_user = db.query(User).filter(
             User.email == user_info['email']).first()
@@ -278,5 +296,9 @@ async def google_login(
 
         # Después de verificar el usuario, generar tokens
 
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Token inválido")
+    except Exception as e:
+        print("Login failed")  # Removed detailed error message
+        raise HTTPException(
+            status_code=403,
+            detail="Login failed"
+        )
